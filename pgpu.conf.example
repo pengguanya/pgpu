@@ -1,0 +1,9 @@
+# Copy to your project root as pgpu.conf and edit.
+IMAGE=my-image
+DOCKERFILE=Dockerfile
+GPUS=all                      # or 0 / 0,1
+HF_CACHE=.hf_cache
+MOUNTS=("$PWD:/workspace" "$PWD/.hf_cache:/root/.cache/huggingface")
+WORKDIR=/workspace
+TRAIN_CMD=""
+PROFILE_CMD=""

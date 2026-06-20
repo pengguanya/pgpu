@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+PGPU_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$PGPU_ROOT/lib/log.sh"
+. "$PGPU_ROOT/lib/detect.sh"
+. "$PGPU_ROOT/lib/setup.sh"
+. "$PGPU_ROOT/lib/config.sh"
+
+PODMAN="${PGPU_PODMAN:-podman}"
+
+usage() {
+  cat <<'EOF'
+pgpu — rootless GPU containers, no sudo required
+
+Usage: pgpu <command> [args]
+
+Commands:
+  doctor     Probe the host and print the resolved setup tier (read-only)
+  setup      Apply the resolved tier (CDI spec, storage/containers config)
+  build      Build the project image
+  run [-- CMD]  Run a GPU container (interactive shell if no CMD)
+  train      Run the project TRAIN_CMD in a container
+  profile    Run the project PROFILE_CMD in a container
+  clean      Clear stale rootless locks / runtime state
+EOF
+}
+
+pgpu_run_argv() {
+  pgpu_load_config; pgpu_require_config || exit 1
+  [ "${1:-}" = "--" ] && shift
+  local argv=("$PODMAN" run -it --rm --network="$NETWORK"
+              --device "nvidia.com/gpu=$GPUS" --ipc=host -w "$WORKDIR")
+  local m; for m in "${MOUNTS[@]}"; do argv+=(-v "$m"); done
+  argv+=("$IMAGE" "$@")
+  printf '%s\n' "${argv[@]}"
+}
+
+cmd_run() {
+  mapfile -t a < <(pgpu_run_argv "$@")
+  if [ "${PGPU_PRINT:-0}" = 1 ]; then printf '%s\n' "${a[@]}"; else exec "${a[@]}"; fi
+}
+
+cmd_build() {
+  pgpu_load_config; pgpu_require_config || exit 1
+  local a=("$PODMAN" build --network=host -t "$IMAGE" -f "$DOCKERFILE" .)
+  if [ "${PGPU_PRINT:-0}" = 1 ]; then printf '%s\n' "${a[@]}"; else exec "${a[@]}"; fi
+}
+
+cmd_train()   { pgpu_load_config; [ -n "$TRAIN_CMD" ]   || { log_fail "TRAIN_CMD not set";   exit 1; }; cmd_run -- bash -lc "$TRAIN_CMD"; }
+cmd_profile() { pgpu_load_config; [ -n "$PROFILE_CMD" ] || { log_fail "PROFILE_CMD not set"; exit 1; }; cmd_run -- bash -lc "$PROFILE_CMD"; }
+
+cmd_clean() {
+  rm -f "/dev/shm/libpod_rootless_lock_$(id -u)" 2>/dev/null || true
+  rm -rf "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/libpod" "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers" 2>/dev/null || true
+  log_pass "cleared stale rootless locks / runtime state"
+}
+
+cmd_doctor() {
+  log_info "Probing host for rootless GPU readiness..."
+  local ver; ver="$(detect_podman_version)"
+  [ -n "$ver" ] && log_pass "podman $ver" || log_warn "podman not found"
+  detect_gpu && log_pass "GPU device nodes present" || log_warn "no /dev/nvidia* found"
+  [ -n "$(detect_nvidia_ctk)" ] && log_pass "nvidia-ctk present" || log_warn "nvidia-ctk missing (needed to generate CDI spec)"
+  detect_subuid && log_pass "subuid ranges present" || log_warn "no subuid ranges (will use single-uid mapping)"
+  detect_home_is_nfs && log_warn "\$HOME is on NFS (overlay store will redirect to local disk)" || log_pass "\$HOME on local fs"
+  detect_apparmor_userns_restricted && log_warn "AppArmor restricts unprivileged userns" || log_pass "userns unrestricted"
+  echo
+  local plan; plan="$(pgpu_resolve_tier)"
+  local tier; tier="$(printf '%s\n' "$plan" | grep '^TIER=' | cut -d= -f2)"
+  echo "Resolved tier: $tier"
+  printf '%s\n' "$plan" | sed 's/^/  plan: /'
+  echo
+  echo "Run 'pgpu setup' to apply."
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  ""|-h|--help|help) usage ;;
+  doctor) cmd_doctor ;;
+  setup) cmd_setup ;;
+  build) cmd_build ;;
+  run) cmd_run "$@" ;;
+  train) cmd_train ;;
+  profile) cmd_profile ;;
+  clean) cmd_clean ;;
+  *) log_fail "unknown command: $cmd"; usage >&2; exit 2 ;;
+esac
