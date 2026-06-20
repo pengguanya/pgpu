@@ -3,6 +3,7 @@ set -euo pipefail
 PGPU_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$PGPU_ROOT/lib/log.sh"
 . "$PGPU_ROOT/lib/detect.sh"
+. "$PGPU_ROOT/lib/setup.sh"
 
 usage() {
   cat <<'EOF'
@@ -43,5 +44,6 @@ cmd="${1:-}"; shift || true
 case "$cmd" in
   ""|-h|--help|help) usage ;;
   doctor) cmd_doctor ;;
+  setup) cmd_setup ;;
   *) log_fail "unknown command: $cmd"; usage >&2; exit 2 ;;
 esac
