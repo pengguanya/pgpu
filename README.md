@@ -27,8 +27,9 @@ cd ~/work/llm-ft
 ~/work/pgpu/bin/pgpu run -- nvidia-smi
 ```
 
-`pgpu` looks for `pgpu.conf` in the current directory. All commands except
-`doctor` and `clean` require a `pgpu.conf`.
+`pgpu` looks for `pgpu.conf` in the current directory. `doctor`, `setup`, and
+`clean` run without a project config; `build`, `run`, `train`, and `profile`
+require a `pgpu.conf`.
 
 ---
 

@@ -13,6 +13,5 @@ out="$(PGPU_PODMAN="$tmp/podman" PGPU_ETC_CDI="/etc/definitely-not-writable-$$" 
       PGPU_SUBUID_FILE="$tmp/subuid" PGPU_APPARMOR_FILE="$tmp/aa" \
       PGPU_STORE_BASE="$tmp/store" \
       bash "$HERE/../bin/pgpu" doctor 2>&1)"
-assert_contains "$out" "Resolved tier:" "doctor prints resolved tier"
-assert_contains "$out" "2" "tier 2 for old podman without sudo"
+assert_contains "$out" "Resolved tier: 2" "doctor prints resolved tier 2 for old podman without sudo"
 pass "doctor"

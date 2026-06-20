@@ -27,6 +27,7 @@ EOF
 
 pgpu_run_argv() {
   pgpu_load_config; pgpu_require_config || exit 1
+  [ "${1:-}" = "--" ] && shift
   local argv=("$PODMAN" run -it --rm --network="$NETWORK"
               --device "nvidia.com/gpu=$GPUS" --ipc=host -w "$WORKDIR")
   local m; for m in "${MOUNTS[@]}"; do argv+=(-v "$m"); done
