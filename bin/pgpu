@@ -2,6 +2,7 @@
 set -euo pipefail
 PGPU_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$PGPU_ROOT/lib/log.sh"
+. "$PGPU_ROOT/lib/detect.sh"
 
 usage() {
   cat <<'EOF'
@@ -20,8 +21,27 @@ Commands:
 EOF
 }
 
+cmd_doctor() {
+  log_info "Probing host for rootless GPU readiness..."
+  local ver; ver="$(detect_podman_version)"
+  [ -n "$ver" ] && log_pass "podman $ver" || log_warn "podman not found"
+  detect_gpu && log_pass "GPU device nodes present" || log_warn "no /dev/nvidia* found"
+  [ -n "$(detect_nvidia_ctk)" ] && log_pass "nvidia-ctk present" || log_warn "nvidia-ctk missing (needed to generate CDI spec)"
+  detect_subuid && log_pass "subuid ranges present" || log_warn "no subuid ranges (will use single-uid mapping)"
+  detect_home_is_nfs && log_warn "\$HOME is on NFS (overlay store will redirect to local disk)" || log_pass "\$HOME on local fs"
+  detect_apparmor_userns_restricted && log_warn "AppArmor restricts unprivileged userns" || log_pass "userns unrestricted"
+  echo
+  local plan; plan="$(pgpu_resolve_tier)"
+  local tier; tier="$(printf '%s\n' "$plan" | grep '^TIER=' | cut -d= -f2)"
+  echo "Resolved tier: $tier"
+  printf '%s\n' "$plan" | sed 's/^/  plan: /'
+  echo
+  echo "Run 'pgpu setup' to apply."
+}
+
 cmd="${1:-}"; shift || true
 case "$cmd" in
   ""|-h|--help|help) usage ;;
+  doctor) cmd_doctor ;;
   *) log_fail "unknown command: $cmd"; usage >&2; exit 2 ;;
 esac
