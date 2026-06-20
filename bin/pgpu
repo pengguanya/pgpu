@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+PGPU_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$PGPU_ROOT/lib/log.sh"
+
+usage() {
+  cat <<'EOF'
+pgpu — rootless GPU containers, no sudo required
+
+Usage: pgpu <command> [args]
+
+Commands:
+  doctor     Probe the host and print the resolved setup tier (read-only)
+  setup      Apply the resolved tier (CDI spec, storage/containers config)
+  build      Build the project image
+  run [-- CMD]  Run a GPU container (interactive shell if no CMD)
+  train      Run the project TRAIN_CMD in a container
+  profile    Run the project PROFILE_CMD in a container
+  clean      Clear stale rootless locks / runtime state
+EOF
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  ""|-h|--help|help) usage ;;
+  *) log_fail "unknown command: $cmd"; usage >&2; exit 2 ;;
+esac
