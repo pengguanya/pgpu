@@ -26,3 +26,21 @@ detect_home_is_nfs() {
   t="$(stat -f -c %T "$h" 2>/dev/null || true)"
   case "$t" in nfs|nfs4) return 0;; *) return 1;; esac
 }
+pgpu_resolve_tier() {
+  local ver tier cdi_dir ignore_chown store_redirect store_base need_static
+  ver="$(detect_podman_version)"
+  store_base="${PGPU_STORE_BASE:-/tmp/$USER-pgpu}"
+  detect_subuid && ignore_chown=0 || ignore_chown=1
+  detect_home_is_nfs && store_redirect=1 || store_redirect=0
+
+  if [ -z "$ver" ] || { ! detect_has_cdi_spec_dirs "$ver" && ! detect_etc_cdi_writable; }; then
+    tier=2; need_static=1; cdi_dir="$HOME/.config/cdi"
+  elif detect_has_cdi_spec_dirs "$ver" && detect_etc_cdi_writable && detect_subuid; then
+    tier=0; need_static=0; cdi_dir="/etc/cdi"
+  else
+    tier=1; need_static=0; cdi_dir="$HOME/.config/cdi"
+  fi
+
+  printf 'TIER=%s\nCDI_DIR=%s\nIGNORE_CHOWN=%s\nSTORE_REDIRECT=%s\nSTORE_BASE=%s\nNEED_STATIC_PODMAN=%s\n' \
+    "$tier" "$cdi_dir" "$ignore_chown" "$store_redirect" "$store_base" "$need_static"
+}
